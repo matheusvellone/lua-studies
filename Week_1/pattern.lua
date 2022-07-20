@@ -4,7 +4,8 @@ local pt = require 'pt'
 local space = lpeg.S(' \n\t')^0
 
 local number = lpeg.R('09')^1
-local numberExpression = (lpeg.S('+-')^-1 * number * ('.' * number)^-1) / tonumber * space
+-- TODO: add optional lead 0 to decimal numbers
+local numberExpression = (lpeg.S('+-')^-1 * (number) * ('.' * number)^-1) / tonumber * space
 
 local openParenthesis = '(' * space
 local closeParenthesis = ')' * space
@@ -37,15 +38,20 @@ function mathOperation (list)
   return acc
 end
 
-local g = lpeg.P({
+local primary = lpeg.V('primary')
+local exp = lpeg.V('exp')
+local term = lpeg.V('term')
+local final = lpeg.V('final')
+
+local g = space * lpeg.P({
   [1] = 'final',
-  primary = numberExpression + openParenthesis * lpeg.V('final') * closeParenthesis,
-  exp = space * lpeg.Ct(lpeg.V('primary') * (operatorsExp * lpeg.V('primary'))^0) / mathOperation,
-  term = space * lpeg.Ct(lpeg.V('exp') * (operatorsMult * lpeg.V('exp'))^0) / mathOperation,
-  final = space * lpeg.Ct(lpeg.V('term') * (operatorsSum * lpeg.V('term'))^0) / mathOperation,
+  primary = numberExpression + openParenthesis * final * closeParenthesis,
+  exp = lpeg.Ct(primary * (operatorsExp * primary)^0) / mathOperation,
+  term = lpeg.Ct(exp * (operatorsMult * exp)^0) / mathOperation,
+  final = lpeg.Ct(term * (operatorsSum * term)^0) / mathOperation,
 }) * -1
 
-local code = '3 + 6.9 * 2'
+local code = '2 * 9^2 - 30'
 
 print('Code is: ', code)
 print(pt.pt(g:match(code)))
