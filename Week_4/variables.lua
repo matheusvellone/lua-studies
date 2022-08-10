@@ -1,6 +1,7 @@
 local lpeg = require 'lpeg'
 local pt = require 'pt'
 local array = require 'array'
+local stringHelper = require 'stringHelper'
 
 local function I (msg)
   return lpeg.P(function () print(msg); return true end)
@@ -141,12 +142,31 @@ local ast = parse(input)
 pt.pt(ast)
 
 local function syntaxError (code, errorPosition)
-  return string.sub(code, errorPosition - 5, errorPosition - 1)
+  local lines = stringHelper.splitLines(code)
+
+  local currentLine = 1
+  local lineStr = ''
+  for _,line in pairs(lines) do
+    lineStr = line
+    if errorPosition < #line then
+      break
+    end
+
+    errorPosition = errorPosition - #line - 1
+    currentLine = currentLine + 1
+  end
+
+  return {
+    lineStr = stringHelper.insert(lineStr, '@', errorPosition),
+    line = currentLine,
+    position = errorPosition,
+  }
 end
 
 if ast == nil then
-  io.stderr:write('Syntax error' .. '\n')
-  io.stderr:write(syntaxError(input, maxMatch))
+  local err = syntaxError(input, maxMatch)
+  io.stderr:write('Syntax error at line ' .. err.line .. ' and position ' .. err.position .. '.\n')
+  io.stderr:write('Error at \'@\': ' .. err.lineStr .. '.\n')
   os.exit(1)
 end
 
@@ -246,73 +266,73 @@ local function run ()
     elseif code[index] == 'add' then
       local b = array.pop(stack)
       local a = array.pop(stack)
-      
+
       array.push(stack, a + b)
       index = index + 1
     elseif code[index] == 'sub' then
       local b = array.pop(stack)
       local a = array.pop(stack)
-      
+
       array.push(stack, a - b)
       index = index + 1
     elseif code[index] == 'mul' then
       local b = array.pop(stack)
       local a = array.pop(stack)
-      
+
       array.push(stack, a * b)
       index = index + 1
     elseif code[index] == 'div' then
       local b = array.pop(stack)
       local a = array.pop(stack)
-      
+
       array.push(stack, a / b)
       index = index + 1
     elseif code[index] == 'mod' then
       local b = array.pop(stack)
       local a = array.pop(stack)
-      
+
       array.push(stack, a % b)
       index = index + 1
     elseif code[index] == 'exp' then
       local b = array.pop(stack)
       local a = array.pop(stack)
-      
+
       array.push(stack, a ^ b)
       index = index + 1
     elseif code[index] == 'g' then
       local b = array.pop(stack)
       local a = array.pop(stack)
-      
+
       array.push(stack, a > b and 1 or 0)
       index = index + 1
     elseif code[index] == 'gt' then
       local b = array.pop(stack)
       local a = array.pop(stack)
-      
+
       array.push(stack, a >= b and 1 or 0)
       index = index + 1
     elseif code[index] == 'l' then
       local b = array.pop(stack)
       local a = array.pop(stack)
-      
+
       array.push(stack, a < b and 1 or 0)
       index = index + 1
     elseif code[index] == 'lt' then
       local b = array.pop(stack)
       local a = array.pop(stack)
-      
+
       array.push(stack, a <= b and 1 or 0)
       index = index + 1
     elseif code[index] == 'eq' then
       local b = array.pop(stack)
       local a = array.pop(stack)
-      
+
       array.push(stack, a == b and 1 or 0)
       index = index + 1
     elseif code[index] == 'ne' then
       local b = array.pop(stack)
       local a = array.pop(stack)
-      
+
       array.push(stack, a ~= b and 1 or 0)
       index = index + 1
     elseif code[index] == 'load' then
