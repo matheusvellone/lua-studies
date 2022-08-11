@@ -202,12 +202,22 @@ end
 
 ------------------------
 
-local function var2num (state, id)
-  local num = state.vars[id]
+local Compiler = {
+  code = {},
+  vars = {},
+  nvars = 0,
+}
+
+function Compiler:addCode (op)
+  array.push(self.code, op)
+end
+
+function Compiler:var2num (id)
+  local num = self.vars[id]
   if not num then
-    num = state.nvars + 1
-    state.nvars = num
-    state.vars[id] = num
+    num = self.nvars + 1
+    self.nvars = num
+    self.vars[id] = num
   end
 
   return num
@@ -228,54 +238,49 @@ local ops = {
   ['!='] = 'ne',
 }
 
-local function codeExp (state, ast)
+function Compiler:codeExp (ast)
   if ast.tag == 'number' then
-    array.push(state.code, 'push')
-    array.push(state.code, ast.value)
+    self:addCode('push')
+    self:addCode(ast.value)
   elseif ast.tag == 'variable' then
-    array.push(state.code, 'load')
-    array.push(state.code, var2num(state, ast.value))
+    self:addCode('load')
+    self:addCode(self:var2num(ast.value))
   elseif ast.tag == 'binop' then
-    codeExp(state, ast.e1)
-    codeExp(state, ast.e2)
+    self:codeExp(ast.e1)
+    self:codeExp(ast.e2)
 
-    array.push(state.code, ops[ast.op])
+    self:addCode(ops[ast.op])
   else
     error('Unknown tag "' .. ast.tag .. '"')
   end
 end
 
-local function codeStatement (state, ast)
+function Compiler:codeStatement (ast)
   if ast.tag == 'assign' then
-    codeExp(state, ast.expression)
-    array.push(state.code, 'store')
-    array.push(state.code, var2num(state, ast.id))
+    self:codeExp(ast.expression)
+    self:addCode('store')
+    self:addCode(self:var2num(ast.id))
   elseif ast.tag == 'seq' then
-    codeStatement(state, ast.statement1)
-    codeStatement(state, ast.statement2)
+    self:codeStatement(ast.statement1)
+    self:codeStatement(ast.statement2)
   elseif ast.tag == 'return' then
-    codeExp(state, ast.expression)
-    array.push(state.code, 'return')
+    self:codeExp(ast.expression)
+    self:addCode('return')
   elseif ast.tag == 'print' then
-    codeExp(state, ast.expression)
-    array.push(state.code, 'print')
+    self:codeExp(ast.expression)
+    self:addCode('print')
   else
     error('Unknown tag "', ast.tag, '"')
   end
 end
 
 local function compile()
-  local state = {
-    code = {},
-    vars = {},
-    nvars = 0,
-  }
-  codeStatement(state, ast)
-  array.push(state.code, 'push')
-  array.push(state.code, 0)
-  array.push(state.code, 'return')
+  Compiler:codeStatement(ast)
+  Compiler:addCode('push')
+  Compiler:addCode(0)
+  Compiler:addCode('return')
 
-  return state.code
+  return Compiler.code
 end
 
 local code = compile()
