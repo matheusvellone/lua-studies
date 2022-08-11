@@ -10,7 +10,6 @@ local C = lpeg.C
 local S = lpeg.S
 local Ct = lpeg.Ct
 
-
 local function I (msg)
   return P(function () print(msg); return true end)
 end
@@ -73,6 +72,14 @@ local digit = R('09')
 local alphanumeric = alpha + digit
 local space = V('space')
 
+local function T (pattern)
+  return pattern * space
+end
+
+local function RW (pattern)
+  return pattern * -alphanumeric * space
+end
+
 local identifier = C(alpha * (alphanumeric + specialAllowedInVariable)^0) * space
 local variable = identifier / getReducer('variable')
 
@@ -87,16 +94,7 @@ local opM = C(S('*/%')) * space
 local opE = C(S('^')) * space
 local operatorAssign = P('=') * space
 
-local blockComment = '#{' * P(1)^0 * '}#'
-b = P{ "(" * ((1 - S"()") + V(1))^0 * ")" }
-
-local openParenthesis = '(' * space
-local closeParenthesis = ')' * space
-local openBraces = '{' * space
-local closeBraces = '}' * space
-local semicolon = ';'* space * space
-local ret = 'return' * S(' \n\t') * space
-local printChar = '@' * space
+local blockComment = I('A') * '#{' * I('A') * (P(1) - '\n')^0 * I('A') * '\n}#'
 
 local comparisonOperands = C((S('<>') * P('=')^-1) + (S('=!') * P('='))) * space
 
@@ -129,7 +127,7 @@ local block = V('block')
 
 local grammar = P({'prog',
   prog = space * statements * -1,
-  primary = completeNumber + openParenthesis * bool * closeParenthesis + variable,
+  primary = completeNumber + T('(') * bool * T(')') + variable,
   exp = Ct(primary * (opE * primary)^0) / foldBinary,
   term = Ct(exp * (opM * exp)^0) / foldBinary,
   sum = Ct(term * (opA * term)^0) / foldBinary,
@@ -137,10 +135,10 @@ local grammar = P({'prog',
 
   statement = block
     + identifier * operatorAssign * bool / nodeAssign
-    + ret * bool / nodeReturn
-    + printChar * bool / nodePrint,
-  statements = statement * (semicolon^-1 * statements^-1) / nodeSeq,
-  block = openBraces * statements^-1 * semicolon^-1 * closeBraces,
+    + RW('return') * bool / nodeReturn
+    + T('@') * bool / nodePrint,
+  statements = statement * (T(';')^-1 * statements^-1) / nodeSeq,
+  block = T('{') * statements^-1 * T(';')^-1 * T('}'),
 
   space = ((S(' \n\t') + lineComment)^0 + blockComment) * P(updateMaxMatch),
 })
@@ -154,7 +152,14 @@ end
 local input = io.read('a')
 print('Code is: \n---------------\n' .. input .. '\n---------------')
 local ast = parse(input)
-pt.pt(ast)
+
+-- local file = io.open('graph.txt', 'w')
+-- file:write('graph {\n')
+-- local function printASTToGraphvizFile (ast)
+--   print(pt.pt(ast))
+--   file:write()
+-- end
+-- file:write('}')
 
 local function syntaxError (code, errorPosition)
   local lines = stringHelper.splitLines(code)
