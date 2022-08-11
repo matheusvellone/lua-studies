@@ -72,15 +72,25 @@ local digit = R('09')
 local alphanumeric = alpha + digit
 local space = V('space')
 
+local reservedWords = {
+  "return",
+}
+local excludeReservedWords = P(false)
+for i = 1, #reservedWords do
+  excludeReservedWords = excludeReservedWords + reservedWords[i]
+end
+excludeReservedWords = excludeReservedWords * -alphanumeric
+
 local function T (pattern)
   return pattern * space
 end
 
 local function RW (pattern)
+  assert(excludeReservedWords:match(pattern))
   return pattern * -alphanumeric * space
 end
 
-local identifier = C(alpha * (alphanumeric + specialAllowedInVariable)^0) * space
+local identifier = (C(alpha * (alphanumeric + specialAllowedInVariable)^0) - excludeReservedWords) * space
 local variable = identifier / getReducer('variable')
 
 local number = digit^1
