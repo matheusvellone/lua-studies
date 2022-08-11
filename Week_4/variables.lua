@@ -57,11 +57,13 @@ local function updateMaxMatch (_, p)
   return true
 end
 
+local lineComment = lpeg.P('#') * (lpeg.P(1) - lpeg.P('\n'))^0
+
 local alpha = lpeg.R('az', 'AZ')
 local specialAllowedInVariable = lpeg.P('_')
 local digit = lpeg.R('09')
 local alphanumeric = alpha + digit
-local space = lpeg.S(' \n\t')^0 * lpeg.P(updateMaxMatch)
+local space = lpeg.V('space')
 
 local identifier = lpeg.C(alpha * (alphanumeric + specialAllowedInVariable)^0) * space
 local variable = identifier / getReducer('variable')
@@ -114,8 +116,8 @@ local statement = lpeg.V('statement')
 local statements = lpeg.V('statements')
 local block = lpeg.V('block')
 
-local grammar = space * lpeg.P({
-  [1] = 'statements',
+local grammar = lpeg.P({'prog',
+  prog = space * statements * -1,
   primary = completeNumber + openParenthesis * bool * closeParenthesis + variable,
   exp = lpeg.Ct(primary * (opE * primary)^0) / foldBinary,
   term = lpeg.Ct(exp * (opM * exp)^0) / foldBinary,
@@ -128,7 +130,9 @@ local grammar = space * lpeg.P({
     + printChar * bool / nodePrint,
   statements = statement * (semicolon^-1 * statements^-1) / nodeSeq,
   block = openBraces * statements^-1 * semicolon^-1 * closeBraces,
-}) * -1
+
+  space = (lpeg.S(' \n\t'))^0 * lpeg.P(updateMaxMatch),
+})
 
 local function parse (input)
   return grammar:match(input)
