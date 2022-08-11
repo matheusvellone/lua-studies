@@ -3,8 +3,16 @@ local pt = require 'pt'
 local array = require 'array'
 local stringHelper = require 'stringHelper'
 
+local P = lpeg.P
+local R = lpeg.R
+local V = lpeg.V
+local C = lpeg.C
+local S = lpeg.S
+local Ct = lpeg.Ct
+
+
 local function I (msg)
-  return lpeg.P(function () print(msg); return true end)
+  return P(function () print(msg); return true end)
 end
 
 local function getReducer (tag)
@@ -57,37 +65,40 @@ local function updateMaxMatch (_, p)
   return true
 end
 
-local lineComment = lpeg.P('#') * (lpeg.P(1) - lpeg.P('\n'))^0
+local lineComment = P('#') * (P(1) - P('\n'))^0
 
-local alpha = lpeg.R('az', 'AZ')
-local specialAllowedInVariable = lpeg.P('_')
-local digit = lpeg.R('09')
+local alpha = R('az', 'AZ')
+local specialAllowedInVariable = P('_')
+local digit = R('09')
 local alphanumeric = alpha + digit
-local space = lpeg.V('space')
+local space = V('space')
 
-local identifier = lpeg.C(alpha * (alphanumeric + specialAllowedInVariable)^0) * space
+local identifier = C(alpha * (alphanumeric + specialAllowedInVariable)^0) * space
 local variable = identifier / getReducer('variable')
 
 local number = digit^1
 
-local scientificNotation = lpeg.S('eE') * lpeg.S('-+')^-1 * number
+local scientificNotation = S('eE') * S('-+')^-1 * number
 local decimal = '.' * number
-local completeNumber = (lpeg.S('+-')^-1 * (number * decimal^-1 + decimal) * scientificNotation^-1) / tonumber / getReducer('number') * space
+local completeNumber = (S('+-')^-1 * (number * decimal^-1 + decimal) * scientificNotation^-1) / tonumber / getReducer('number') * space
 
-local opA = lpeg.C(lpeg.S('+-')) * space
-local opM = lpeg.C(lpeg.S('*/%')) * space
-local opE = lpeg.C(lpeg.S('^')) * space
-local operatorAssign = lpeg.P('=') * space
+local opA = C(S('+-')) * space
+local opM = C(S('*/%')) * space
+local opE = C(S('^')) * space
+local operatorAssign = P('=') * space
+
+local blockComment = '#{' * P(1)^0 * '}#'
+b = P{ "(" * ((1 - S"()") + V(1))^0 * ")" }
 
 local openParenthesis = '(' * space
 local closeParenthesis = ')' * space
 local openBraces = '{' * space
 local closeBraces = '}' * space
 local semicolon = ';'* space * space
-local ret = 'return' * space
+local ret = 'return' * S(' \n\t') * space
 local printChar = '@' * space
 
-local comparisonOperands = lpeg.C((lpeg.S('<>') * lpeg.P('=')^-1) + (lpeg.S('=!') * lpeg.P('='))) * space
+local comparisonOperands = C((S('<>') * P('=')^-1) + (S('=!') * P('='))) * space
 
 local function foldBinary (list)
   local tree = list[1]
@@ -104,25 +115,25 @@ local function foldBinary (list)
   return tree
 end
 
-local exp = lpeg.V('exp')
-local term = lpeg.V('term')
+local exp = V('exp')
+local term = V('term')
 
-local primary = lpeg.V('primary')
-local exp = lpeg.V('exp')
-local term = lpeg.V('term')
-local sum = lpeg.V('sum')
-local bool = lpeg.V('bool')
-local statement = lpeg.V('statement')
-local statements = lpeg.V('statements')
-local block = lpeg.V('block')
+local primary = V('primary')
+local exp = V('exp')
+local term = V('term')
+local sum = V('sum')
+local bool = V('bool')
+local statement = V('statement')
+local statements = V('statements')
+local block = V('block')
 
-local grammar = lpeg.P({'prog',
+local grammar = P({'prog',
   prog = space * statements * -1,
   primary = completeNumber + openParenthesis * bool * closeParenthesis + variable,
-  exp = lpeg.Ct(primary * (opE * primary)^0) / foldBinary,
-  term = lpeg.Ct(exp * (opM * exp)^0) / foldBinary,
-  sum = lpeg.Ct(term * (opA * term)^0) / foldBinary,
-  bool = lpeg.Ct(sum * (comparisonOperands * sum)^-1) / foldBinary,
+  exp = Ct(primary * (opE * primary)^0) / foldBinary,
+  term = Ct(exp * (opM * exp)^0) / foldBinary,
+  sum = Ct(term * (opA * term)^0) / foldBinary,
+  bool = Ct(sum * (comparisonOperands * sum)^-1) / foldBinary,
 
   statement = block
     + identifier * operatorAssign * bool / nodeAssign
@@ -131,7 +142,7 @@ local grammar = lpeg.P({'prog',
   statements = statement * (semicolon^-1 * statements^-1) / nodeSeq,
   block = openBraces * statements^-1 * semicolon^-1 * closeBraces,
 
-  space = (lpeg.S(' \n\t'))^0 * lpeg.P(updateMaxMatch),
+  space = ((S(' \n\t') + lineComment)^0 + blockComment) * P(updateMaxMatch),
 })
 
 local function parse (input)
@@ -161,7 +172,7 @@ local function syntaxError (code, errorPosition)
   end
 
   return {
-    lineStr = stringHelper.insert(lineStr, '@', errorPosition),
+    lineStr = lineStr,
     line = currentLine,
     position = errorPosition,
   }
@@ -170,7 +181,7 @@ end
 if ast == nil then
   local err = syntaxError(input, maxMatch)
   io.stderr:write('Syntax error at line ' .. err.line .. ' and position ' .. err.position .. '.\n')
-  io.stderr:write('Error at \'@\': ' .. err.lineStr .. '.\n')
+  io.stderr:write('Line with error: "' .. err.lineStr .. '"\n')
   os.exit(1)
 end
 
