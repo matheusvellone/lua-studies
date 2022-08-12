@@ -14,21 +14,25 @@ local function I (msg)
   return P(function () print(msg); return true end)
 end
 
-local function getReducer (tag)
-  return function (value)
-    return {
-      tag = tag,
-      value = value,
-    }
-  end
-end
+local function getNode (tag, ...)
+  local labels = table.pack(...)
 
-local function nodeAssign (id, expression)
-  return {
-    tag = 'assign',
-    id = id,
-    expression = expression,
-  }
+  return function (...)
+    local values = table.pack(...)
+    if #labels ~= #values then
+      error('Length mismatch. Expecting ' .. #labels .. ' but received ' .. #values)
+    end
+
+    local result = {
+      tag = tag,
+    }
+
+    for index, label in pairs(labels) do
+      result[label] = values[index]
+    end
+
+    return result
+  end
 end
 
 local function nodeSeq (statement1, statement2)
@@ -41,20 +45,6 @@ local function nodeSeq (statement1, statement2)
       statement2=statement2,
     }
   end
-end
-
-local function nodeReturn (expression)
-  return {
-    tag = 'return',
-    expression = expression,
-  }
-end
-
-local function nodePrint (expression)
-  return {
-    tag = 'print',
-    expression = expression,
-  }
 end
 
 local maxMatch = 0
@@ -91,13 +81,13 @@ local function RW (pattern)
 end
 
 local identifier = (C(alpha * (alphanumeric + specialAllowedInVariable)^0) - excludeReservedWords) * space
-local variable = identifier / getReducer('variable')
+local variable = identifier / getNode('variable', 'value')
 
 local number = digit^1
 
 local scientificNotation = S('eE') * S('-+')^-1 * number
 local decimal = '.' * number
-local completeNumber = (S('+-')^-1 * (number * decimal^-1 + decimal) * scientificNotation^-1) / tonumber / getReducer('number') * space
+local completeNumber = (S('+-')^-1 * (number * decimal^-1 + decimal) * scientificNotation^-1) / tonumber / getNode('number', 'value') * space
 
 local notOp = C('!') * space
 local opA = C(S('+-')) * space
@@ -157,9 +147,9 @@ local grammar = P({'prog',
   bool = notOp^0 * (Ct(sum * (comparisonOperands * sum)^-1) / foldBinary) / unop,
 
   statement = block
-    + identifier * operatorAssign * bool / nodeAssign
-    + RW('return') * bool / nodeReturn
-    + T('@') * bool / nodePrint,
+    + identifier * operatorAssign * bool / getNode('assign', 'id', 'expression')
+    + RW('return') * bool / getNode('return', 'expression')
+    + T('@') * bool / getNode('print', 'expression'),
   statements = statement * (T(';')^-1 * statements^-1) / nodeSeq,
   block = T('{') * statements^-1 * T(';')^-1 * T('}'),
 
