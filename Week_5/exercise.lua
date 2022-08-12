@@ -27,8 +27,10 @@ local function getNode (tag, ...)
       tag = tag,
     }
 
-    for index, label in pairs(labels) do
-      result[label] = values[index]
+    for index, label in ipairs(labels) do
+      if label ~= 'n' then
+        result[label] = values[index]
+      end
     end
 
     return result
@@ -40,9 +42,9 @@ local function nodeSeq (statement1, statement2)
     return statement1
   else
     return {
-      tag ='seq',
-      statement1=statement1,
-      statement2=statement2,
+      tag = 'seq',
+      statement1 =statement1,
+      statement2 =statement2,
     }
   end
 end
@@ -63,7 +65,8 @@ local alphanumeric = alpha + digit
 local space = V('space')
 
 local reservedWords = {
-  "return",
+  'return',
+  'if',
 }
 local excludeReservedWords = P(false)
 for i = 1, #reservedWords do
@@ -147,6 +150,7 @@ local grammar = P({'prog',
   bool = notOp^0 * (Ct(sum * (comparisonOperands * sum)^-1) / foldBinary) / unop,
 
   statement = block
+    + RW('if') * bool * block / getNode('if', 'condition', 'thenBlock')
     + identifier * operatorAssign * bool / getNode('assign', 'id', 'expression')
     + RW('return') * bool / getNode('return', 'expression')
     + T('@') * bool / getNode('print', 'expression'),
@@ -203,7 +207,7 @@ if ast == nil then
   os.exit(1)
 end
 
-print(pt.pt(ast))
+-- print(pt.pt(ast))
 
 ------------------------
 
@@ -244,6 +248,21 @@ local ops = {
   ['!'] = 'not',
 }
 
+function Compiler:currentPosition ()
+  return #self.code
+end
+
+function Compiler:jump ()
+  self:addCode('jump')
+  self:addCode(0)
+
+  return self:currentPosition()
+end
+
+function Compiler:fixJump (position)
+  self.code[position] = self:currentPosition()
+end
+
 function Compiler:codeExp (ast)
   if ast.tag == 'number' then
     self:addCode('push')
@@ -278,8 +297,13 @@ function Compiler:codeStatement (ast)
   elseif ast.tag == 'print' then
     self:codeExp(ast.expression)
     self:addCode('print')
+  elseif ast.tag == 'if' then
+    self:codeExp(ast.condition)
+    local jumpPosition = self:jump()
+    self:codeStatement(ast.thenBlock)
+    self:fixJump(jumpPosition)
   else
-    error('Unknown tag "', ast.tag, '"')
+    error('Unknown tag "' .. ast.tag .. '"')
   end
 end
 
@@ -404,6 +428,16 @@ local function run ()
       print('Print command result', value)
 
       index = index + 1
+    elseif code[index] == 'jump' then
+      local conditionResult = array.pop(stack)
+
+      if conditionResult == 0 or conditionResult == nil then
+        local jumpPosition = code[index + 1]
+        print(jumpPosition)
+        index = jumpPosition + 1
+      else
+        index = index + 2
+      end
     elseif code[index] == 'return' then
       return
     else
