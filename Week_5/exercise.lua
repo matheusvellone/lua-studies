@@ -260,7 +260,7 @@ function Compiler:jump ()
 end
 
 function Compiler:fixJump (position)
-  self.code[position] = self:currentPosition()
+  self.code[position] = self:currentPosition() - position
 end
 
 function Compiler:codeExp (ast)
@@ -433,11 +433,11 @@ local function run ()
 
       if conditionResult == 0 or conditionResult == nil then
         local jumpPosition = code[index + 1]
-        print(jumpPosition)
-        index = jumpPosition + 1
-      else
-        index = index + 2
+        print(index, jumpPosition)
+        index = index + jumpPosition
       end
+
+      index = index + 2
     elseif code[index] == 'return' then
       return
     else
